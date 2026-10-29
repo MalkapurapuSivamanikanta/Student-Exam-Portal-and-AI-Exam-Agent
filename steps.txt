@@ -1,0 +1,191 @@
+login to gcloud in terminal : gcloud auth application-default login
+
+create env:
+python3 -m venv .venv
+source .venv/bin/activate
+python -m pip install --upgrade pip
+python -m pip install -r requirements.txt
+
+1. create the agent code in exam_agent/agent.py
+
+test the agent with adk run exam_agent
+agent Sample input: 
+
+{"student_id": 1, "student_course": "B.Tech", "student_branch": "CSE", "chosen_subject": "Machine Learning"}
+
+deploy the agent to agent_engine
+
+adk deploy agent_engine \
+  --project=tactical-curve-512912-k2 \
+  --region=asia-south1 \
+  --display_name=exam_agent \
+ADK/students_exam_agent/exam_agent
+
+api endpoint 
+
+1. create a session
+curl --location 'https://asia-south1-aiplatform.googleapis.com/v1/projects/tactical-curve-512912-k2/locations/asia-south1/reasoningEngines/99826859709038592:query' \
+  --header 'Content-Type: application/json' \
+  --header "Authorization: Bearer $(gcloud auth print-access-token)" \
+  --data '{
+      "class_method": "create_session",
+      "input": {
+          "user_id": "testId"
+      }
+  }'
+
+5. run the session
+
+curl --location 'https://asia-south1-aiplatform.googleapis.com/v1/projects/tactical-curve-512912-k2/locations/asia-south1/reasoningEngines/99826859709038592:streamQuery?alt=sse' \
+  --header "Authorization: Bearer $(gcloud auth print-access-token)" \
+  --header 'Content-Type: application/json' \
+  --data '{
+    "class_method": "async_stream_query",
+    "input": {
+      "user_id": "testId",
+      "session_id": "2445299016766849024",
+      "message": {"student_id": 1, "student_course": "B.Tech", "student_branch": "CSE", "chosen_subject": "Machine Learning"}
+    }
+  }'
+
+run the (python test_deployed.py)
+
+2. create a students TABLE
+
+-- 1. students_info
+CREATE TABLE students_info (
+    student_id          SERIAL          PRIMARY KEY,
+    student_name        VARCHAR(100)    NOT NULL,
+    gender              CHAR(1),
+    id_card_no          VARCHAR(30)     NOT NULL,
+    student_course      VARCHAR(20)     NOT NULL,   -- e.g. 'B.Tech'
+    student_branch      VARCHAR(50)     NOT NULL,   -- e.g. 'CSE'
+    chosen_subject      VARCHAR(100),               -- e.g. 'Machine Learning'
+    section             VARCHAR(2)      NOT NULL,
+    current_year        SMALLINT,
+    written_exam        SMALLINT        NOT NULL DEFAULT 0,   -- 0 = not written, 1 = written
+    exam_score          NUMERIC(4,2),
+    created_at          TIMESTAMP       NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT uq_students_id_card_no   UNIQUE (id_card_no),
+    CONSTRAINT chk_gender               CHECK (gender IN ('M', 'F', 'O')),
+    CONSTRAINT chk_current_year         CHECK (current_year BETWEEN 1 AND 4),
+    CONSTRAINT chk_written_exam         CHECK (written_exam IN (0, 1)),
+    CONSTRAINT chk_exam_score_range     CHECK (exam_score BETWEEN 0 AND 10),
+    CONSTRAINT chk_exam_score_consistency
+        CHECK (
+            (written_exam = 1) OR (written_exam = 0 AND exam_score IS NULL)
+        )
+);
+
+CREATE INDEX idx_students_course_branch_section
+    ON students_info (student_course, student_branch, section);
+CREATE INDEX idx_students_written_exam
+    ON students_info (written_exam);
+
+-- 2. Insert 30 students
+INSERT INTO students_info
+    (student_name, gender, id_card_no, student_course, student_branch, chosen_subject, section, current_year, written_exam, exam_score)
+VALUES
+    ('Ravi Kumar',        'M', '21CS1001', 'B.Tech', 'CSE',  'Machine Learning',      'A', 3, 0, NULL),
+    ('Anita Sharma',      'F', '21CS1002', 'B.Tech', 'CSE',  'Cloud Computing',       'A', 3, 0, NULL),
+    ('Suresh Reddy',      'M', '21CS1003', 'B.Tech', 'CSE',  'Data Structures',       'A', 3, 0, NULL),
+    ('Priya Nair',        'F', '21CS1004', 'B.Tech', 'CSE',  'Cyber Security',        'A', 3, 0, NULL),
+    ('Karthik Rao',       'M', '21CS1005', 'B.Tech', 'CSE',  'Machine Learning',      'B', 3, 0, NULL),
+    ('Divya Menon',       'F', '21CS1006', 'B.Tech', 'CSE',  'Cloud Computing',       'B', 3, 0, NULL),
+    ('Arjun Patel',       'M', '21CS1007', 'B.Tech', 'CSE',  'Data Structures',       'B', 3, 0, NULL),
+    ('Sneha Iyer',        'F', '21CS1008', 'B.Tech', 'CSE',  'Cyber Security',        'B', 3, 0, NULL),
+    ('Rahul Verma',       'M', '22CS1009', 'B.Tech', 'CSE',  'Machine Learning',      'C', 2, 0, NULL),
+    ('Alex Johnson',      'O', '22CS1010', 'B.Tech', 'CSE',  'Cloud Computing',       'C', 2, 0, NULL),
+    ('Meena Krishnan',    'F', '22EC2011', 'B.Tech', 'ECE',  'VLSI Design',           'A', 2, 0, NULL),
+    ('Vikram Singh',      'M', '22EC2012', 'B.Tech', 'ECE',  'Embedded Systems',      'A', 2, 0, NULL),
+    ('Lakshmi Devi',      'F', '22EC2013', 'B.Tech', 'ECE',  'Signal Processing',     'A', 2, 0, NULL),
+    ('Naveen Gupta',      'M', '22EC2014', 'B.Tech', 'ECE',  'VLSI Design',           'B', 2, 0, NULL),
+    ('Pooja Joshi',       'F', '22EC2015', 'B.Tech', 'ECE',  'Embedded Systems',      'B', 2, 0, NULL),
+    ('Harish Babu',       'M', '23IT3016', 'B.Tech', 'IT',   'Web Technologies',      'A', 1, 0, NULL),
+    ('Kavya Reddy',       'F', '23IT3017', 'B.Tech', 'IT',   'Data Analytics',        'A', 1, 0, NULL),
+    ('Manoj Kumar',       'M', '23IT3018', 'B.Tech', 'IT',   'Web Technologies',      'A', 1, 0, NULL),
+    ('Swathi Rao',        'F', '23IT3019', 'B.Tech', 'IT',   'Data Analytics',        'B', 1, 0, NULL),
+    ('Deepak Chandra',    'M', '23IT3020', 'B.Tech', 'IT',   'Web Technologies',      'B', 1, 0, NULL),
+    ('Anjali Mishra',     'F', '20ME4021', 'B.Tech', 'MECH', 'Thermodynamics',        'A', 4, 0, NULL),
+    ('Gopal Krishna',     'M', '20ME4022', 'B.Tech', 'MECH', 'Robotics',              'A', 4, 0, NULL),
+    ('Ramya Sri',         'F', '20ME4023', 'B.Tech', 'MECH', 'Thermodynamics',        'A', 4, 0, NULL),
+    ('Sandeep Yadav',     'M', '20ME4024', 'B.Tech', 'MECH', 'Robotics',              'B', 4, 0, NULL),
+    ('Bhavana Naidu',     'F', '20ME4025', 'B.Tech', 'MECH', 'Thermodynamics',        'B', 4, 0, NULL),
+    ('Tarun Varma',       'M', '21EE5026', 'B.Tech', 'EEE',  'Power Systems',         'A', 3, 0, NULL),
+    ('Nithya Prasad',     'F', '21EE5027', 'B.Tech', 'EEE',  'Control Systems',       'A', 3, 0, NULL),
+    ('Imran Khan',        'M', '21EE5028', 'B.Tech', 'EEE',  'Power Systems',         'B', 3, 0, NULL),
+    ('Shruthi Murthy',    'F', '21EE5029', 'B.Tech', 'EEE',  'Control Systems',       'B', 3, 0, NULL),
+    ('Prakash Naik',      'M', '21EE5030', 'B.Tech', 'EEE',  'Power Systems',         'B', 3, 0, NULL);
+
+-- 3. student_login
+CREATE TABLE student_login (
+    login_id        SERIAL          PRIMARY KEY,
+    student_id      INT             NOT NULL,
+    login_password  VARCHAR(255)    NOT NULL,   -- plain text for testing only; use a HASH in production
+    is_active       BOOLEAN         NOT NULL DEFAULT TRUE,
+    last_login_at   TIMESTAMP,
+    created_at      TIMESTAMP       NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT fk_login_student
+        FOREIGN KEY (student_id) REFERENCES students_info (student_id)
+        ON DELETE CASCADE,
+    CONSTRAINT uq_login_student_id UNIQUE (student_id)   -- one login per student
+);
+
+-- 4. Insert logins (password = 'Pass@' + id_card_no, same as your earlier list)
+INSERT INTO student_login (student_id, login_password)
+SELECT student_id, 'Pass@' || id_card_no
+FROM students_info;
+
+See student password details 
+
+SELECT s.id_card_no, l.*
+FROM students_info s
+JOIN student_login l ON l.student_id = s.student_id
+ORDER BY s.student_id;
+
+
+streamlit run streamlit_app.py
+
+Student portal flow:
+1. The student logs in with their ID card number and password.
+2. The portal verifies the credentials and displays the subject from the student record.
+3. Starting the exam fetches the student's exam details and generates questions for that subject.
+4. Submitting the exam saves the score and written-exam status to students_info.
+5. Students whose written_exam status is already set cannot start another attempt; the portal shows their saved score.
+
+Deploy the Docker image to cloud run
+
+1. create a repo in artifact registry 
+once created copy path
+asia-south1-docker.pkg.dev/tactical-curve-512912-k2/studentsexam
+
+push image to docker
+
+docker buildx build \
+  --platform linux/amd64 \
+  -f Dockerfile \
+  -t asia-south1-docker.pkg.dev/tactical-curve-512912-k2/studentsexam/student_agent:v2 \
+  --push .
+
+2. deploy to cloud run
+
+gcloud run deploy students-exam-agent \
+  --image=asia-south1-docker.pkg.dev/tactical-curve-512912-k2/studentsexam/student_agent:v2 \
+  --project=tactical-curve-512912-k2 \
+  --region=asia-south1 \
+  --port=8000 \
+  --allow-unauthenticated \
+  --env-vars-file=.env.yaml
+
+once deployed you will get url open it to run project
+Service URL: https://students-exam-agent-291789729726.asia-south1.run.app
+
+
+1. created the agent
+2. created the database tables and insert data in sql
+3. deploy the agent to agent_registry
+4. connect the deployed agent endpoint to frontend that connects to db fetch student records 
+5. deploy the UI to cloud run
+pass to agent for Questions evaluates and update score in db
