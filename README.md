@@ -30,6 +30,30 @@ flowchart LR
     Portal -->|Calculate score and save once| Service
 ```
 
+## Student exam flow
+
+```mermaid
+flowchart TD
+    Start([Open portal]) --> Login[Enter ID card number and password]
+    Login --> Credentials{Credentials valid<br/>and login active?}
+    Credentials -->|No| LoginError[Show login error]
+    LoginError --> Login
+    Credentials -->|Yes| ExamStatus{Exam already completed?}
+    ExamStatus -->|Yes| SavedResult[Show saved score]
+    ExamStatus -->|No| Subject{Subject configured?}
+    Subject -->|No| SubjectError[Show configuration error]
+    Subject -->|Yes| StartExam[Select Start Exam]
+    StartExam --> Generate[Request 10 subject-specific questions<br/>from Vertex AI Agent Engine]
+    Generate --> QuestionsReady{Questions generated?}
+    QuestionsReady -->|No| GenerateError[Show generation error]
+    GenerateError --> StartExam
+    QuestionsReady -->|Yes| TakeExam[Answer questions]
+    TakeExam --> Submit[Submit exam]
+    Submit --> Score[Calculate score]
+    Score --> Save[Save score and mark exam completed<br/>in PostgreSQL]
+    Save --> SavedResult
+```
+
 ## How it works
 
 1. A student signs in with their ID card number and password.
